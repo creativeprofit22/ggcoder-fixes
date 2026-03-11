@@ -28,7 +28,7 @@ Image drag & drop from Windows Explorer is broken in WSL because Windows paths (
 
 Three bugs in the terminal input component:
 
-- **Stale cursor closure** — `setValue` callbacks captured `cursor` from render scope instead of reading current value. Typing fast or during async operations could insert/delete at the wrong position. Fixed with a `cursorRef` that `setCursor` keeps in sync.
+- **Stale cursor closure** — `setValue` callbacks captured `cursor` from render scope instead of reading current value. Typing fast or during async operations could insert/delete at the wrong position. Fixed with a `cursorRef` that `setCursor` keeps in sync, **plus a snapshot pattern** (`const pos = cursorRef.current`) before each `setCursor` call — because `setCursor` synchronously mutates the ref, but `setValue`'s functional updater runs later during React's render phase. Without the snapshot, backspace/typing would use the already-mutated ref and operate on the wrong position.
 
 - **Async image extraction race** — `extractImagePaths()` runs async with a 300ms debounce. When the promise resolved, it called `setValue(cleanText)` with text derived from the *old* value, overwriting anything typed in the interim. Fixed with a functional `setValue` update that preserves new keystrokes.
 

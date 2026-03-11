@@ -161,27 +161,30 @@ code = code.replace(
 );
 
 // 2. Fix stale cursor in setValue callbacks — newline insertion
+//    Snapshot cursorRef.current BEFORE setCursor mutates it, so the
+//    setValue functional updater (which runs later during React render)
+//    uses the correct pre-mutation position.
 code = code.replace(
-    'setValue((v) => v.slice(0, cursor) + \"\\\\n\" + v.slice(cursor));',
-    'setValue((v) => v.slice(0, cursorRef.current) + \"\\\\n\" + v.slice(cursorRef.current));'
+    'setValue((v) => v.slice(0, cursor) + \"\\\\n\" + v.slice(cursor));\n            setCursor((c) => c + 1);',
+    'const pos = cursorRef.current;\n            setValue((v) => v.slice(0, pos) + \"\\\\n\" + v.slice(pos));\n            setCursor((c) => c + 1);'
 );
 
 // 3. Fix stale cursor in backspace handler
 code = code.replace(
-    'setValue((v) => v.slice(0, cursor - 1) + v.slice(cursor));',
-    'setValue((v) => v.slice(0, cursorRef.current - 1) + v.slice(cursorRef.current));'
+    'setValue((v) => v.slice(0, cursor - 1) + v.slice(cursor));\n                setCursor((c) => c - 1);',
+    'const pos = cursorRef.current;\n                setValue((v) => v.slice(0, pos - 1) + v.slice(pos));\n                setCursor((c) => c - 1);'
 );
 
-// 4. Fix stale cursor in text input handler
+// 4. Fix stale cursor in text input handler + paste offset
 code = code.replace(
-    'setValue((v) => v.slice(0, cursor) + normalized + v.slice(cursor));',
-    'setValue((v) => v.slice(0, cursorRef.current) + normalized + v.slice(cursorRef.current));'
+    'setValue((v) => v.slice(0, cursor) + normalized + v.slice(cursor));\n            setCursor((c) => c + normalized.length);',
+    'const pos = cursorRef.current;\n            setValue((v) => v.slice(0, pos) + normalized + v.slice(pos));\n            setCursor((c) => c + normalized.length);'
 );
 
 // 5. Fix paste offset using stale cursor
 code = code.replace(
     'setPasteOffset(cursor); // record where paste starts on first chunk',
-    'setPasteOffset(cursorRef.current); // record where paste starts on first chunk'
+    'setPasteOffset(pos); // record where paste starts on first chunk'
 );
 
 // 6. Fix paste detection threshold (dictation misdetection)

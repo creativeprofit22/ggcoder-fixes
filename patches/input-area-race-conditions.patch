@@ -42,30 +42,33 @@
              onToggleTasks?.();
              return;
          }
-@@ -168,7 +179,7 @@
+@@ -168,7 +179,8 @@
                  return;
          }
          if (key.return && (key.shift || key.meta)) {
 -            setValue((v) => v.slice(0, cursor) + "\n" + v.slice(cursor));
-+            setValue((v) => v.slice(0, cursorRef.current) + "\n" + v.slice(cursorRef.current));
++            const pos = cursorRef.current;
++            setValue((v) => v.slice(0, pos) + "\n" + v.slice(pos));
              setCursor((c) => c + 1);
              return;
          }
-@@ -243,7 +254,7 @@
+@@ -243,7 +255,8 @@
          }
          if (key.backspace || key.delete) {
              if (cursor > 0) {
 -                setValue((v) => v.slice(0, cursor - 1) + v.slice(cursor));
-+                setValue((v) => v.slice(0, cursorRef.current - 1) + v.slice(cursorRef.current));
++                const pos = cursorRef.current;
++                setValue((v) => v.slice(0, pos - 1) + v.slice(pos));
                  setCursor((c) => c - 1);
              }
              else if (!value && images.length > 0) {
-@@ -330,15 +341,15 @@
+@@ -330,15 +343,16 @@
          }
          if (input) {
              const normalized = input.replace(/\r\n?/g, "\n");
 -            setValue((v) => v.slice(0, cursor) + normalized + v.slice(cursor));
-+            setValue((v) => v.slice(0, cursorRef.current) + normalized + v.slice(cursorRef.current));
++            const pos = cursorRef.current;
++            setValue((v) => v.slice(0, pos) + normalized + v.slice(pos));
              setCursor((c) => c + normalized.length);
              // Detect paste: Ink delivers pasted text as input.length > 1
              // For large pastes, Ink may split into multiple chunks, so we
@@ -75,7 +78,7 @@
                  setPasteText((prev) => {
                      if (!prev)
 -                        setPasteOffset(cursor); // record where paste starts on first chunk
-+                        setPasteOffset(cursorRef.current); // record where paste starts on first chunk
++                        setPasteOffset(pos); // record where paste starts on first chunk
                      return prev + normalized;
                  });
                  if (pasteTimerRef.current)
