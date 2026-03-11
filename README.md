@@ -1,55 +1,55 @@
-# GG Coder — Image Support Fixes & Guides
+# GG Coder — Community Fixes & Guides
 
-Community patches and documentation for getting image support working properly in [GG Coder](https://www.npmjs.com/package/@kenkaiiii/ggcoder) (`@kenkaiiii/ggcoder`) across all platforms.
+Community patches and documentation for [GG Coder](https://www.npmjs.com/package/@kenkaiiii/ggcoder) (`@kenkaiiii/ggcoder`) across all platforms.
 
 ## Why This Exists
 
-GG Coder has built-in image support — you can send images directly to Claude from your terminal. Claude's vision handles them perfectly. But depending on your platform, **getting the image from your filesystem into the request** can be broken or non-obvious.
-
-This repo provides:
-- 🔧 **Patches** for platform-specific bugs
-- 📖 **Guides** so you actually know what features exist and how to use them
+GG Coder is great, but some platform-specific bugs and input race conditions can bite you. This repo provides drop-in fixes you can re-apply after every update.
 
 ## Quick Start
 
-### Windows / WSL Users
-
-Image drag & drop is broken because Windows paths (`C:\Users\...`) aren't converted to WSL paths (`/mnt/c/Users/...`).
-
-**One-liner fix:**
+**One-liner — applies all patches:**
 
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/creativeprofit22/ggcoder-fixes/main/scripts/apply-fix.sh)
 ```
 
-Then restart GG Coder. Drag & drop images from Windows Explorer — they just work now.
+Then restart GG Coder.
+
+## What Gets Fixed
+
+### 1. WSL/Windows Image Path Support (`image.js`)
+
+Image drag & drop from Windows Explorer is broken in WSL because Windows paths (`C:\Users\...`) aren't converted to WSL paths (`/mnt/c/Users/...`).
 
 📖 [Full guide →](docs/windows-wsl.md)
 
-### macOS Users
+### 2. Input Area Race Conditions (`InputArea.js`)
 
-Image support works out of the box. You probably don't need patches — but you might not know about these features:
+Three bugs in the terminal input component:
 
-- **Drag & drop** image files from Finder into the terminal
-- **`Ctrl+I`** to paste an image from your clipboard (screenshots, etc.)
+- **Stale cursor closure** — `setValue` callbacks captured `cursor` from render scope instead of reading current value. Typing fast or during async operations could insert/delete at the wrong position. Fixed with a `cursorRef` that `setCursor` keeps in sync.
 
-📖 [Full guide →](docs/macos.md)
+- **Async image extraction race** — `extractImagePaths()` runs async with a 300ms debounce. When the promise resolved, it called `setValue(cleanText)` with text derived from the *old* value, overwriting anything typed in the interim. Fixed with a functional `setValue` update that preserves new keystrokes.
 
-### Linux (Native) Users
+- **Dictation misdetected as paste** — Voice dictation input (e.g. macOS dictation) arrives as multi-character chunks, triggering the paste detection heuristic (`input.length > 1`). This collapsed dictated text into a `[Pasted text]` badge. Fixed by raising the threshold to `input.length > 8` and requiring newlines for shorter chunks.
 
-Same as macOS for drag & drop — your terminal pastes POSIX paths and GG Coder handles them. Clipboard paste (`Ctrl+I`) is macOS-only for now.
+### 3. Task Toggle Keybinding
+
+Changed from `~` (Shift+backtick) to `Ctrl+T` to avoid conflicts with normal typing.
 
 ## What's in the Box
 
 ```
 ├── patches/
-│   └── wsl-windows-paths.patch   # Diff you can apply with `patch -p1`
+│   ├── wsl-windows-paths.patch           # image.js diff
+│   └── input-area-race-conditions.patch  # InputArea.js diff
 ├── scripts/
-│   └── apply-fix.sh              # Auto-detect install, backup, and patch
+│   └── apply-fix.sh                      # Auto-detect install, backup, and patch all
 ├── docs/
-│   ├── windows-wsl.md            # Windows/WSL guide + troubleshooting
-│   └── macos.md                  # macOS guide + tips
-└── README.md                     # You are here
+│   ├── windows-wsl.md                    # Windows/WSL guide + troubleshooting
+│   └── macos.md                          # macOS guide + tips
+└── README.md
 ```
 
 ## How Image Support Works (All Platforms)
@@ -58,7 +58,6 @@ Same as macOS for drag & drop — your terminal pastes POSIX paths and GG Coder 
 2. After ~300ms, GG Coder checks if the path points to a real image file
 3. If yes: reads the file, base64-encodes it, shows an `[Image #1]` badge, and removes the path from your text
 4. When you hit Enter, the image is sent to Claude as a vision content block
-5. Claude sees the image and responds
 
 **Supported formats:** `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`
 **Also attachable:** `.md`, `.txt` (sent as text content)
@@ -67,12 +66,8 @@ Same as macOS for drag & drop — your terminal pastes POSIX paths and GG Coder 
 
 ```bash
 npm update -g @kenkaiiii/ggcoder
-```
-
-This will overwrite any patches. Re-run the apply script:
-
-```bash
-bash scripts/apply-fix.sh
+# Re-apply all patches:
+bash <(curl -sL https://raw.githubusercontent.com/creativeprofit22/ggcoder-fixes/main/scripts/apply-fix.sh)
 ```
 
 ## Tested With
@@ -83,8 +78,8 @@ bash scripts/apply-fix.sh
 
 ## Contributing
 
-Found a bug or have a fix for another platform? Open an issue or PR. Keep it simple — one patch per issue.
+Found a bug or have a fix for another platform? Open an issue or PR.
 
 ## Disclaimer
 
-This is an unofficial community repo. Not affiliated with Ken Kai or the GG Coder project. If these fixes prove useful, consider suggesting them upstream.
+Unofficial community repo. Not affiliated with Ken Kai or the GG Coder project.

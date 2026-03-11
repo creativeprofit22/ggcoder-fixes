@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# apply-fix.sh — Apply the WSL/Windows image path fix to GG Coder
+# apply-fix.sh — Apply all community patches to GG Coder
 #
 # Usage:
 #   curl -sL https://raw.githubusercontent.com/creativeprofit22/ggcoder-fixes/main/scripts/apply-fix.sh | bash
@@ -17,7 +17,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   GG Coder — WSL/Windows Image Path Fix     ║${NC}"
+echo -e "${BLUE}║   GG Coder — Community Patches               ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -39,10 +39,7 @@ if [ -z "$GGCODER_REAL" ]; then
 fi
 
 # Navigate up from bin to the package root
-# Typical structure: .../node_modules/@kenkaiiii/ggcoder/dist/cli.js (bin target)
-# or:               .../node_modules/.bin/ggcoder -> ../../../@kenkaiiii/ggcoder/dist/cli.js
 PACKAGE_DIR=$(dirname "$GGCODER_REAL")
-# Walk up until we find package.json
 while [ ! -f "$PACKAGE_DIR/package.json" ] && [ "$PACKAGE_DIR" != "/" ]; do
     PACKAGE_DIR=$(dirname "$PACKAGE_DIR")
 done
@@ -52,37 +49,35 @@ if [ ! -f "$PACKAGE_DIR/package.json" ]; then
     exit 1
 fi
 
-TARGET="$PACKAGE_DIR/dist/utils/image.js"
-
-if [ ! -f "$TARGET" ]; then
-    echo -e "${RED}✗ Target file not found: $TARGET${NC}"
-    exit 1
-fi
-
 # --- Check current version ---
 VERSION=$(node -e "console.log(require('$PACKAGE_DIR/package.json').version)" 2>/dev/null || echo "unknown")
 echo -e "  Package:  ${GREEN}@kenkaiiii/ggcoder@${VERSION}${NC}"
 echo -e "  Location: ${BLUE}${PACKAGE_DIR}${NC}"
 echo ""
 
-# --- Check if already patched ---
-if grep -q "toWslPath" "$TARGET" 2>/dev/null; then
-    echo -e "${YELLOW}⚠ Already patched! The WSL fix is already applied.${NC}"
-    echo "  Nothing to do."
-    exit 0
-fi
+APPLIED=0
+SKIPPED=0
+FAILED=0
 
-# --- Backup ---
-BACKUP="${TARGET}.backup"
-cp "$TARGET" "$BACKUP"
-echo -e "  ${GREEN}✓${NC} Backup created: ${BLUE}image.js.backup${NC}"
+# ============================================================
+# Patch 1: WSL/Windows image path support (image.js)
+# ============================================================
+echo -e "${BLUE}[1/2] WSL/Windows image path fix${NC}"
+TARGET_IMAGE="$PACKAGE_DIR/dist/utils/image.js"
 
-# --- Apply the patch inline ---
-# We use node to do the patching since sed doesn't handle multiline well across platforms.
+if [ ! -f "$TARGET_IMAGE" ]; then
+    echo -e "  ${RED}✗ Target file not found: $TARGET_IMAGE${NC}"
+    ((FAILED++))
+elif grep -q "toWslPath" "$TARGET_IMAGE" 2>/dev/null; then
+    echo -e "  ${YELLOW}⚠ Already applied — skipping${NC}"
+    ((SKIPPED++))
+else
+    cp "$TARGET_IMAGE" "${TARGET_IMAGE}.backup"
+    echo -e "  ${GREEN}✓${NC} Backup: image.js.backup"
 
-node -e "
+    node -e "
 const fs = require('fs');
-const filePath = '$TARGET';
+const filePath = '$TARGET_IMAGE';
 let code = fs.readFileSync(filePath, 'utf-8');
 
 // 1. Add toWslPath function after isAttachablePath
@@ -121,22 +116,126 @@ code = code.replace(
 );
 
 fs.writeFileSync(filePath, code);
-console.log('  Patch applied successfully.');
-"
+" && {
+        echo -e "  ${GREEN}✓${NC} Patch applied"
+        ((APPLIED++))
+    } || {
+        echo -e "  ${RED}✗ Patch failed — restoring backup${NC}"
+        cp "${TARGET_IMAGE}.backup" "$TARGET_IMAGE"
+        ((FAILED++))
+    }
+fi
+echo ""
 
-if [ $? -eq 0 ]; then
-    echo ""
-    echo -e "  ${GREEN}✓${NC} Patch applied successfully!"
-    echo ""
-    echo -e "${GREEN}Done!${NC} Restart ggcoder for changes to take effect."
-    echo ""
-    echo "  To undo:  cp \"${BACKUP}\" \"${TARGET}\""
-    echo ""
-    echo -e "  ${YELLOW}Note:${NC} Running 'npm update -g @kenkaiiii/ggcoder' will overwrite this fix."
-    echo "  Re-run this script after updating."
+# ============================================================
+# Patch 2: Input area race conditions & stale cursor (InputArea.js)
+#   - Stale cursor closure: uses cursorRef so setValue callbacks
+#     read current cursor instead of stale closure value
+#   - Async image extraction race: functional setValue update
+#     preserves text typed during async extractImagePaths
+#   - Dictation misdetection: raises paste threshold so voice
+#     dictation isn't incorrectly treated as pasted text
+# ============================================================
+echo -e "${BLUE}[2/2] Input area race conditions & stale cursor fix${NC}"
+TARGET_INPUT="$PACKAGE_DIR/dist/ui/components/InputArea.js"
+
+if [ ! -f "$TARGET_INPUT" ]; then
+    echo -e "  ${RED}✗ Target file not found: $TARGET_INPUT${NC}"
+    ((FAILED++))
+elif grep -q "cursorRef" "$TARGET_INPUT" 2>/dev/null; then
+    echo -e "  ${YELLOW}⚠ Already applied — skipping${NC}"
+    ((SKIPPED++))
 else
-    echo -e "${RED}✗ Patch failed. Restoring backup...${NC}"
-    cp "$BACKUP" "$TARGET"
-    echo -e "  ${GREEN}✓${NC} Original file restored."
+    cp "$TARGET_INPUT" "${TARGET_INPUT}.backup"
+    echo -e "  ${GREEN}✓${NC} Backup: InputArea.js.backup"
+
+    node -e "
+const fs = require('fs');
+const filePath = process.argv[1];
+let code = fs.readFileSync(filePath, 'utf-8');
+
+// 1. Replace cursor state with cursorRef + setCursor wrapper
+code = code.replace(
+    'const [value, setValue] = useState(\"\");\n    const [cursor, setCursor] = useState(0);',
+    'const [value, setValue] = useState(\"\");\n    const cursorRef = useRef(0);\n    const [cursor, setCursorState] = useState(0);\n    const setCursor = (valOrFn) => { const next = typeof valOrFn === \\'function\\' ? valOrFn(cursorRef.current) : valOrFn; cursorRef.current = next; setCursorState(next); };'
+);
+
+// 2. Fix stale cursor in setValue callbacks — newline insertion
+code = code.replace(
+    'setValue((v) => v.slice(0, cursor) + \"\\\\n\" + v.slice(cursor));',
+    'setValue((v) => v.slice(0, cursorRef.current) + \"\\\\n\" + v.slice(cursorRef.current));'
+);
+
+// 3. Fix stale cursor in backspace handler
+code = code.replace(
+    'setValue((v) => v.slice(0, cursor - 1) + v.slice(cursor));',
+    'setValue((v) => v.slice(0, cursorRef.current - 1) + v.slice(cursorRef.current));'
+);
+
+// 4. Fix stale cursor in text input handler
+code = code.replace(
+    'setValue((v) => v.slice(0, cursor) + normalized + v.slice(cursor));',
+    'setValue((v) => v.slice(0, cursorRef.current) + normalized + v.slice(cursorRef.current));'
+);
+
+// 5. Fix paste offset using stale cursor
+code = code.replace(
+    'setPasteOffset(cursor); // record where paste starts on first chunk',
+    'setPasteOffset(cursorRef.current); // record where paste starts on first chunk'
+);
+
+// 6. Fix paste detection threshold (dictation misdetection)
+code = code.replace(
+    'if (input.length > 1) {',
+    'if (input.length > 8 || (input.length > 1 && input.includes(\"\\\\n\"))) {'
+);
+
+// 7. Fix async image extraction race condition — use functional setValue
+code = code.replace(
+    '                    setValue(cleanText);\n                    setCursor(Math.min(cursor, cleanText.length));',
+    '                    // Use functional update to avoid overwriting text typed during async operation\n                    setValue((currentValue) => {\n                        // Only apply if the value hasn\\'t changed beyond what we extracted from\n                        if (currentValue === value) {\n                            return cleanText;\n                        }\n                        // If user typed more, try to apply the same removal\n                        const diff = currentValue.slice(value.length);\n                        return cleanText + diff;\n                    });\n                    setCursor((c) => Math.min(c, cleanText.length));'
+);
+
+// 8. Fix task toggle keybinding (tilde → Ctrl+T)
+code = code.replace(
+    /\/\/ Shift\+\\\`.*/,
+    '// Ctrl+T toggles task overlay — works even while agent is running'
+);
+code = code.replace(
+    'if (input === \"~\") {',
+    'if (key.ctrl && input === \"t\") {'
+);
+
+fs.writeFileSync(filePath, code);
+" "$TARGET_INPUT" && {
+        # Verify syntax
+        if node -c "$TARGET_INPUT" 2>/dev/null; then
+            echo -e "  ${GREEN}✓${NC} Patch applied (syntax verified)"
+            ((APPLIED++))
+        else
+            echo -e "  ${RED}✗ Patch produced invalid JS — restoring backup${NC}"
+            cp "${TARGET_INPUT}.backup" "$TARGET_INPUT"
+            ((FAILED++))
+        fi
+    } || {
+        echo -e "  ${RED}✗ Patch failed — restoring backup${NC}"
+        cp "${TARGET_INPUT}.backup" "$TARGET_INPUT"
+        ((FAILED++))
+    }
+fi
+
+echo ""
+echo -e "${BLUE}────────────────────────────────────────────────${NC}"
+echo -e "  Applied: ${GREEN}${APPLIED}${NC}  Skipped: ${YELLOW}${SKIPPED}${NC}  Failed: ${RED}${FAILED}${NC}"
+echo -e "${BLUE}────────────────────────────────────────────────${NC}"
+echo ""
+
+if [ "$FAILED" -gt 0 ]; then
+    echo -e "${RED}Some patches failed.${NC} Check the output above."
     exit 1
 fi
+
+echo -e "${GREEN}Done!${NC} Restart ggcoder for changes to take effect."
+echo ""
+echo -e "  ${YELLOW}Note:${NC} Running 'npm update -g @kenkaiiii/ggcoder' will overwrite these fixes."
+echo "  Re-run this script after updating."
