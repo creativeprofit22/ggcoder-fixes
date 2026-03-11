@@ -4,7 +4,7 @@ Community patches and documentation for [GG Coder](https://www.npmjs.com/package
 
 ## Why This Exists
 
-GG Coder is great, but some platform-specific bugs and input race conditions can bite you. This repo provides drop-in fixes you can re-apply after every update.
+GG Coder is great, but some platform-specific bugs and input handling issues can bite you. This repo provides drop-in fixes you can re-apply after every update.
 
 ## Quick Start
 
@@ -24,19 +24,17 @@ Image drag & drop from Windows Explorer is broken in WSL because Windows paths (
 
 📖 [Full guide →](docs/windows-wsl.md)
 
-### 2. Input Area Race Conditions (`InputArea.js`)
+### 2. Input Area Fixes (`InputArea.js`)
 
-Three bugs in the terminal input component:
+Four bugs in the terminal input component, plus a keybinding change:
 
-- **Stale cursor closure** — `setValue` callbacks captured `cursor` from render scope instead of reading current value. Typing fast or during async operations could insert/delete at the wrong position. Fixed with a `cursorRef` that `setCursor` keeps in sync, **plus a snapshot pattern** (`const pos = cursorRef.current`) before each `setCursor` call — because `setCursor` synchronously mutates the ref, but `setValue`'s functional updater runs later during React's render phase. Without the snapshot, backspace/typing would use the already-mutated ref and operate on the wrong position.
+- **Stale cursor in setValue callbacks** — `setValue` functional updaters captured `cursor` from render scope, so typing fast or during async operations would insert/delete at the wrong position. Fixed by introducing a `cursorRef` that `setCursor` keeps in sync, with a **snapshot pattern** (`const pos = cursorRef.current`) taken *before* each `setCursor` call. This is critical because `setCursor` synchronously mutates the ref, but `setValue`'s functional updater runs later during React's render phase — without the snapshot, backspace deletes the wrong character, typing inserts at the wrong position, and Shift+Enter places the newline incorrectly.
 
 - **Async image extraction race** — `extractImagePaths()` runs async with a 300ms debounce. When the promise resolved, it called `setValue(cleanText)` with text derived from the *old* value, overwriting anything typed in the interim. Fixed with a functional `setValue` update that preserves new keystrokes.
 
 - **Dictation misdetected as paste** — Voice dictation input (e.g. macOS dictation) arrives as multi-character chunks, triggering the paste detection heuristic (`input.length > 1`). This collapsed dictated text into a `[Pasted text]` badge. Fixed by raising the threshold to `input.length > 8` and requiring newlines for shorter chunks.
 
-### 3. Task Toggle Keybinding
-
-Changed from `~` (Shift+backtick) to `Ctrl+T` to avoid conflicts with normal typing.
+- **Task toggle keybinding** — Changed from `~` (Shift+backtick) to `Ctrl+T` to avoid conflicts with normal typing.
 
 ## What's in the Box
 
@@ -74,7 +72,7 @@ bash <(curl -sL https://raw.githubusercontent.com/creativeprofit22/ggcoder-fixes
 
 - GG Coder v4.2.13
 - Windows 11 + WSL2 (Ubuntu)
-- Claude claude-opus-4-6 / claude-sonnet-4-6
+- Opus 4.6 / Sonnet 4.6
 
 ## Contributing
 
