@@ -19,7 +19,7 @@ Image drag & drop is broken because Windows paths (`C:\Users\...`) aren't conver
 **One-liner fix:**
 
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/OWNER/ggcoder-fixes/main/scripts/apply-fix.sh)
+bash <(curl -sL https://raw.githubusercontent.com/creativeprofit22/ggcoder-fixes/main/scripts/apply-fix.sh)
 ```
 
 Then restart GG Coder. Drag & drop images from Windows Explorer — they just work now.

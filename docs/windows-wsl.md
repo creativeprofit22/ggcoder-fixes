@@ -33,13 +33,13 @@ A small patch to `dist/utils/image.js` that:
 ### Option A: One-liner (easiest)
 
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/OWNER/ggcoder-fixes/main/scripts/apply-fix.sh)
+bash <(curl -sL https://raw.githubusercontent.com/creativeprofit22/ggcoder-fixes/main/scripts/apply-fix.sh)
 ```
 
 ### Option B: Clone and run
 
 ```bash
-git clone https://github.com/OWNER/ggcoder-fixes.git
+git clone https://github.com/creativeprofit22/ggcoder-fixes.git
 cd ggcoder-fixes
 bash scripts/apply-fix.sh
 ```

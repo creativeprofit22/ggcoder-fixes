@@ -3,9 +3,9 @@
 # apply-fix.sh — Apply the WSL/Windows image path fix to GG Coder
 #
 # Usage:
-#   curl -sL https://raw.githubusercontent.com/YOUR_USERNAME/ggcoder-fixes/main/scripts/apply-fix.sh | bash
+#   curl -sL https://raw.githubusercontent.com/creativeprofit22/ggcoder-fixes/main/scripts/apply-fix.sh | bash
 #   — or —
-#   git clone https://github.com/YOUR_USERNAME/ggcoder-fixes.git && cd ggcoder-fixes && bash scripts/apply-fix.sh
+#   git clone https://github.com/creativeprofit22/ggcoder-fixes.git && cd ggcoder-fixes && bash scripts/apply-fix.sh
 #
 
 set -euo pipefail
