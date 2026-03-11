@@ -1,0 +1,49 @@
+--- a/dist/utils/image.js
++++ b/dist/utils/image.js
+@@ -22,6 +22,21 @@
+     const ext = path.extname(filePath).toLowerCase();
+     return ATTACHABLE_EXTENSIONS.has(ext);
+ }
++/**
++ * Detect a Windows-style absolute path (e.g. "C:\foo", "c:/foo", "D:\bar")
++ * and convert it to the WSL mount point (/mnt/c/foo) when running on Linux.
++ */
++function toWslPath(p) {
++    // Match drive letter patterns: C:\, C:/, c:\, c:/
++    const winAbsRe = /^([A-Za-z]):[/\\]/;
++    const m = winAbsRe.exec(p);
++    if (m && process.platform === "linux") {
++        const drive = m[1].toLowerCase();
++        const rest = p.slice(3).replace(/\\/g, "/");
++        return `/mnt/${drive}/${rest}`;
++    }
++    return p;
++}
+ function resolvePath(filePath, cwd) {
+     let resolved = filePath.trim();
+     // Strip surrounding quotes
+@@ -33,8 +48,13 @@
+     if (resolved.startsWith("file://")) {
+         resolved = resolved.slice(7);
+     }
++    // Convert Windows paths to WSL paths (e.g. C:\Users\... → /mnt/c/Users/...)
++    resolved = toWslPath(resolved);
+     // Unescape backslash-escaped characters (e.g. "\ " → " ")
+-    resolved = resolved.replace(/\\(.)/g, "$1");
++    // Only do this if not a Windows-style path (already handled by toWslPath)
++    if (!(/^[A-Za-z]:[/\\]/.test(filePath.trim().replace(/^['"]/, "")))) {
++        resolved = resolved.replace(/\\(.)/g, "$1");
++    }
+     // Resolve home dir
+     if (resolved.startsWith("~/")) {
+         resolved = path.join(process.env.HOME ?? "/", resolved.slice(2));
+@@ -54,7 +74,8 @@
+     return (stripped.includes("/") ||
+         stripped.includes("\\") ||
+         stripped.startsWith("~") ||
+-        stripped.startsWith("file://"));
++        stripped.startsWith("file://") ||
++        /^[A-Za-z]:/.test(stripped));
+ }
+ /**
+  * Extract attachable file paths from input text by checking if tokens resolve
