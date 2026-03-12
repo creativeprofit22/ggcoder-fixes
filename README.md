@@ -1,30 +1,51 @@
 # GG Coder — Community Fixes & Guides
 
-Community patches and documentation for [GG Coder](https://www.npmjs.com/package/@kenkaiiii/ggcoder) (`@kenkaiiii/ggcoder`) across all platforms.
+Community patches, optimized agent configs, and documentation for [GG Coder](https://www.npmjs.com/package/@kenkaiiii/ggcoder) (`@kenkaiiii/ggcoder`) across all platforms.
 
 ## Why This Exists
 
-GG Coder is great, but some platform-specific bugs and input handling issues can bite you. This repo provides drop-in fixes you can re-apply after every update.
+GG Coder is great, but some platform-specific bugs and input handling issues can bite you, and the default install ships with no agent definitions — meaning subagents all run on your expensive parent model with no tool restrictions. This repo provides drop-in fixes and optimized configs you can re-apply after every update.
 
 ## Quick Start
 
-**One-liner — applies all patches:**
+**Apply all patches (image + input fixes):**
 
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/creativeprofit22/ggcoder-fixes/main/scripts/apply-fix.sh)
 ```
 
+**Install optimized agent configs:**
+
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/creativeprofit22/ggcoder-fixes/main/scripts/install-agents.sh)
+```
+
 Then restart GG Coder.
 
-## What Gets Fixed
+## What's Included
 
-### 1. WSL/Windows Image Path Support (`image.js`)
+### 1. Optimized Agent Definitions
+
+Four agent definitions that give GG Coder's subagent tool actual structure instead of spawning expensive clones of itself:
+
+| Agent | Model | Tools | Purpose |
+|-------|-------|-------|---------|
+| **scout** | Haiku (cheapest) | read, grep, find, ls, bash | Fast read-only codebase search. 10 tool call limit. |
+| **runner** | Haiku (cheapest) | bash, read | Execute commands, report results. Never modifies files. |
+| **worker** | Inherits parent | all | Complex multi-step tasks — explore, edit, verify. 30 turn cap. |
+| **fork** | Inherits parent | all | Parallel execution. Structured output format. 30 turn cap. |
+
+Plus an optimized `CLAUDE.md` that cuts ~300 tokens/turn by replacing verbose routing tables with two lines.
+
+📖 [Full guide →](docs/agents.md)
+
+### 2. WSL/Windows Image Path Support (`image.js`)
 
 Image drag & drop from Windows Explorer is broken in WSL because Windows paths (`C:\Users\...`) aren't converted to WSL paths (`/mnt/c/Users/...`).
 
 📖 [Full guide →](docs/windows-wsl.md)
 
-### 2. Input Area Fixes (`InputArea.js`)
+### 3. Input Area Fixes (`InputArea.js`)
 
 Four bugs in the terminal input component, plus a keybinding change:
 
@@ -39,14 +60,22 @@ Four bugs in the terminal input component, plus a keybinding change:
 ## What's in the Box
 
 ```
+├── agents/
+│   ├── scout.md                             # Read-only search agent (Haiku)
+│   ├── runner.md                            # Command execution agent (Haiku)
+│   ├── worker.md                            # Full-capability agent (inherits model)
+│   ├── fork.md                              # Parallel execution agent (inherits model)
+│   └── CLAUDE.md                            # Optimized CLAUDE.md template
 ├── patches/
-│   ├── wsl-windows-paths.patch           # image.js diff
-│   └── input-area-race-conditions.patch  # InputArea.js diff
+│   ├── wsl-windows-paths.patch              # image.js diff
+│   └── input-area-race-conditions.patch     # InputArea.js diff
 ├── scripts/
-│   └── apply-fix.sh                      # Auto-detect install, backup, and patch all
+│   ├── apply-fix.sh                         # Auto-detect install, backup, and patch all
+│   └── install-agents.sh                    # Install agent configs to ~/.gg/agents/
 ├── docs/
-│   ├── windows-wsl.md                    # Windows/WSL guide + troubleshooting
-│   └── macos.md                          # macOS guide + tips
+│   ├── agents.md                            # Agent config guide + token optimization
+│   ├── windows-wsl.md                       # Windows/WSL guide + troubleshooting
+│   └── macos.md                             # macOS guide + tips
 └── README.md
 ```
 
@@ -64,9 +93,13 @@ Four bugs in the terminal input component, plus a keybinding change:
 
 ```bash
 npm update -g @kenkaiiii/ggcoder
-# Re-apply all patches:
+# Re-apply patches:
 bash <(curl -sL https://raw.githubusercontent.com/creativeprofit22/ggcoder-fixes/main/scripts/apply-fix.sh)
+# Re-install agents (only needed if you deleted ~/.gg/agents/):
+bash <(curl -sL https://raw.githubusercontent.com/creativeprofit22/ggcoder-fixes/main/scripts/install-agents.sh)
 ```
+
+Agent configs live in `~/.gg/agents/` and survive GG Coder updates — you only need to re-run `install-agents.sh` if you deleted them or want to pull newer versions.
 
 ## Tested With
 
