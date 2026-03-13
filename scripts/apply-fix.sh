@@ -241,7 +241,19 @@ if [ ! -f "$TARGET_CLI" ]; then
     echo -e "  ${RED}✗ Target file not found: $TARGET_CLI${NC}"
     ((FAILED++))
 elif grep -q "runJsonMode" "$TARGET_CLI" 2>/dev/null; then
-    echo -e "  ${YELLOW}⚠ Already applied — skipping${NC}"
+    # Check if this is our patch or an upstream fix
+    if grep -q 'import { runJsonMode }' "$TARGET_CLI" 2>/dev/null && \
+       grep -q '"system-prompt"' "$TARGET_CLI" 2>/dev/null; then
+        echo -e "  ${YELLOW}⚠ Already applied — skipping${NC}"
+    else
+        echo -e "  ${GREEN}⚠ Upstream fixed natively — skipping (no patch needed)${NC}"
+    fi
+    ((SKIPPED++))
+elif grep -q '"--json"' "$TARGET_CLI" 2>/dev/null || \
+     grep -qE 'json.*:.*\{.*type.*boolean' "$TARGET_CLI" 2>/dev/null; then
+    # Author fixed it differently — --json is handled but not via runJsonMode import
+    echo -e "  ${GREEN}⚠ Upstream already handles --json natively — skipping${NC}"
+    echo -e "  ${YELLOW}  → You can remove this patch from apply-fix.sh if this persists across updates${NC}"
     ((SKIPPED++))
 else
     cp "$TARGET_CLI" "${TARGET_CLI}.backup"
