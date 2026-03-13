@@ -1,0 +1,22 @@
+Resilience: Token Refresh Retry & Connection Error Recovery
+===========================================================
+
+Fixes two issues that cause frequent session crashes in GG Coder:
+
+1. Token refresh (oauth/anthropic.js, auth-storage.js, error-handler.js):
+   - refreshAnthropicToken() used raw fetch() with zero retries
+   - Any transient 5xx, network blip, or invalid_grant crashed the session
+   - Fix: retry loop (3 attempts, exponential backoff) for server/network errors
+   - On permanent invalid_grant: throw RefreshTokenInvalidError, clear stored creds
+   - Clean user message: "Session expired. Run ggcoder login to re-authenticate."
+
+2. Connection errors (gg-agent/agent-loop):
+   - Anthropic SDK ConnectionError wasn't caught by the agent loop
+   - Network blips during multi-turn sessions killed the entire conversation
+   - Fix: isConnectionError() detector + retry (3 attempts, 1s/2s/4s backoff)
+
+Files modified:
+  dist/core/oauth/anthropic.js          — RefreshTokenInvalidError + retry loop
+  dist/core/auth-storage.js             — import RefreshTokenInvalidError, clear dead tokens
+  dist/utils/error-handler.js           — friendly error message for invalid refresh tokens
+  node_modules/@kenkaiiii/gg-agent/dist/index.js — isConnectionError + retry in agent loop
