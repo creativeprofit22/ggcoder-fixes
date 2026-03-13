@@ -1,0 +1,44 @@
+--- a/dist/cli.js
++++ b/dist/cli.js
+@@ -1,6 +1,7 @@
+ #!/usr/bin/env node
+ import { parseArgs } from "node:util";
+ import { checkAndAutoUpdate } from "./core/auto-update.js";
++import { runJsonMode } from "./modes/json-mode.js";
+ // ...
+ async function main() {
+     await checkAndAutoUpdate();
+@@ -8,10 +9,16 @@
+-    const { values } = parseArgs({
++    const { values, positionals } = parseArgs({
+         options: {
+             version: { type: "boolean", short: "v" },
++            json: { type: "boolean" },
++            provider: { type: "string" },
++            model: { type: "string" },
++            "max-turns": { type: "string" },
++            "system-prompt": { type: "string" },
+         },
+-        allowPositionals: false,
++        allowPositionals: true,
+         strict: true,
+     });
+     if (values.version) {
+@@ -19,6 +26,19 @@
+         process.exit(0);
+     }
++    if (values.json) {
++        runJsonMode({
++            provider: values.provider ?? "anthropic",
++            model: values.model ?? "claude-opus-4-6",
++            maxTurns: values["max-turns"] ? parseInt(values["max-turns"], 10) : 10,
++            systemPrompt: values["system-prompt"],
++            message: positionals.join(" "),
++            cwd: process.cwd(),
++        }).catch((err) => {
++            process.stderr.write(formatUserError(err) + "\n");
++            process.exit(1);
++        });
++        return;
++    }
+     // ... interactive TUI path continues

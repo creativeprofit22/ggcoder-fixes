@@ -57,6 +57,10 @@ Four bugs in the terminal input component, plus a keybinding change:
 
 - **Task toggle keybinding** — Changed from `~` (Shift+backtick) to `Ctrl+T` to avoid conflicts with normal typing.
 
+### 4. Sub-Agent Spawning Fix (`cli.js`)
+
+`cli.js` didn't accept the `--json`, `--provider`, `--model`, `--max-turns`, `--system-prompt` flags that the `subagent` tool passes when spawning child processes, causing all sub-agents to crash immediately with `ERR_PARSE_ARGS_UNKNOWN_OPTION`. The fix adds these flags to `parseArgs` and wires up the existing `runJsonMode()` from `modes/json-mode.js`.
+
 ## What's in the Box
 
 ```
@@ -68,7 +72,8 @@ Four bugs in the terminal input component, plus a keybinding change:
 │   └── CLAUDE.md                            # Optimized CLAUDE.md template
 ├── patches/
 │   ├── wsl-windows-paths.patch              # image.js diff
-│   └── input-area-race-conditions.patch     # InputArea.js diff
+│   ├── input-area-race-conditions.patch     # InputArea.js diff
+│   └── cli-subagent-flags.patch             # cli.js diff
 ├── scripts/
 │   ├── apply-fix.sh                         # Auto-detect install, backup, and patch all
 │   └── install-agents.sh                    # Install agent configs to ~/.gg/agents/
@@ -103,7 +108,7 @@ Agent configs live in `~/.gg/agents/` and survive GG Coder updates — you only 
 
 ## Tested With
 
-- GG Coder v4.2.13
+- GG Coder v4.2.24
 - Windows 11 + WSL2 (Ubuntu)
 - Opus 4.6 / Sonnet 4.6
 

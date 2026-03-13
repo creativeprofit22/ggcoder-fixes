@@ -62,7 +62,7 @@ FAILED=0
 # ============================================================
 # Patch 1: WSL/Windows image path support (image.js)
 # ============================================================
-echo -e "${BLUE}[1/2] WSL/Windows image path fix${NC}"
+echo -e "${BLUE}[1/3] WSL/Windows image path fix${NC}"
 TARGET_IMAGE="$PACKAGE_DIR/dist/utils/image.js"
 
 if [ ! -f "$TARGET_IMAGE" ]; then
@@ -136,7 +136,7 @@ echo ""
 #   - Dictation misdetection: raises paste threshold so voice
 #     dictation isn't incorrectly treated as pasted text
 # ============================================================
-echo -e "${BLUE}[2/2] Input area race conditions & stale cursor fix${NC}"
+echo -e "${BLUE}[2/3] Input area race conditions & stale cursor fix${NC}"
 TARGET_INPUT="$PACKAGE_DIR/dist/ui/components/InputArea.js"
 
 if [ ! -f "$TARGET_INPUT" ]; then
@@ -223,6 +223,67 @@ fs.writeFileSync(filePath, code);
     } || {
         echo -e "  ${RED}✗ Patch failed — restoring backup${NC}"
         cp "${TARGET_INPUT}.backup" "$TARGET_INPUT"
+        ((FAILED++))
+    }
+fi
+
+# ============================================================
+# Patch 3: Sub-agent spawning flags (cli.js)
+#   - cli.js didn't accept --json, --provider, --model,
+#     --max-turns, --system-prompt flags that the subagent tool
+#     passes when spawning child processes.
+#   - Adds these flags to parseArgs and wires up runJsonMode().
+# ============================================================
+echo -e "${BLUE}[3/3] Sub-agent spawning flags fix${NC}"
+TARGET_CLI="$PACKAGE_DIR/dist/cli.js"
+
+if [ ! -f "$TARGET_CLI" ]; then
+    echo -e "  ${RED}✗ Target file not found: $TARGET_CLI${NC}"
+    ((FAILED++))
+elif grep -q "runJsonMode" "$TARGET_CLI" 2>/dev/null; then
+    echo -e "  ${YELLOW}⚠ Already applied — skipping${NC}"
+    ((SKIPPED++))
+else
+    cp "$TARGET_CLI" "${TARGET_CLI}.backup"
+    echo -e "  ${GREEN}✓${NC} Backup: cli.js.backup"
+
+    node -e "
+const fs = require('fs');
+const filePath = process.argv[1];
+let code = fs.readFileSync(filePath, 'utf-8');
+
+// 1. Add runJsonMode import after checkAndAutoUpdate import
+code = code.replace(
+    /import \{ checkAndAutoUpdate \}[^\n]+\n/,
+    (m) => m + 'import { runJsonMode } from \"./modes/json-mode.js\";\n'
+);
+
+// 2. Replace parseArgs block to accept new flags
+code = code.replace(
+    'const { values } = parseArgs({\n        options: {\n            version: { type: \"boolean\", short: \"v\" },\n        },\n        allowPositionals: false,\n        strict: true,\n    });',
+    'const { values, positionals } = parseArgs({\n        options: {\n            version: { type: \"boolean\", short: \"v\" },\n            json: { type: \"boolean\" },\n            provider: { type: \"string\" },\n            model: { type: \"string\" },\n            \"max-turns\": { type: \"string\" },\n            \"system-prompt\": { type: \"string\" },\n        },\n        allowPositionals: true,\n        strict: true,\n    });'
+);
+
+// 3. Insert JSON mode handler after the version check block
+code = code.replace(
+    /if \(values\.version\) \{[^}]+\}\n/,
+    (m) => m + '    if (values.json) {\n        runJsonMode({\n            provider: values.provider ?? \"anthropic\",\n            model: values.model ?? \"claude-opus-4-6\",\n            maxTurns: values[\"max-turns\"] ? parseInt(values[\"max-turns\"], 10) : 10,\n            systemPrompt: values[\"system-prompt\"],\n            message: positionals.join(\" \"),\n            cwd: process.cwd(),\n        }).catch((err) => {\n            process.stderr.write(formatUserError(err) + \"\\\\n\");\n            process.exit(1);\n        });\n        return;\n    }\n'
+);
+
+fs.writeFileSync(filePath, code);
+" "$TARGET_CLI" && {
+        # Verify syntax
+        if node -c "$TARGET_CLI" 2>/dev/null; then
+            echo -e "  ${GREEN}✓${NC} Patch applied (syntax verified)"
+            ((APPLIED++))
+        else
+            echo -e "  ${RED}✗ Patch produced invalid JS — restoring backup${NC}"
+            cp "${TARGET_CLI}.backup" "$TARGET_CLI"
+            ((FAILED++))
+        fi
+    } || {
+        echo -e "  ${RED}✗ Patch failed — restoring backup${NC}"
+        cp "${TARGET_CLI}.backup" "$TARGET_CLI"
         ((FAILED++))
     }
 fi
